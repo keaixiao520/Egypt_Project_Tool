@@ -13,37 +13,37 @@ st.sidebar.header("👤 商务咨询 / 合作")
 st.sidebar.info("10年埃及一线建筑师经验，为您提供：\n- 埃及清关、海运实战建议\n- 当地建材市场准入调研\n- 中埃跨境贸易撮合")
 st.sidebar.write("💬 **微信号**: [此处填你的微信号]")
 st.sidebar.write("📧 **邮箱**: [此处填你的邮箱]")
-if st.sidebar.button("预约 1对1 深度咨询"):
-    st.sidebar.success("请通过上述方式联系，我会第一时间回复！")
+
+# --- 初始化“购物篮” ---
+# 这是解决报错的关键：如果篮子不存在，先建一个空篮子
+if 'items' not in st.session_state:
+    st.session_state.items = []
 
 # --- 主界面 ---
 st.title("🏗️ 埃及建材出海总成本计算器 (多商品版)")
 st.markdown("专注解决中埃贸易中“算不准、清关贵、汇率乱”的痛点。")
 
-# --- 初始化商品清单 ---
-if 'items' not in st.session_state:
-    st.session_state.items = []
-
 # --- 输入区域 ---
-with st.expander("➕ 添加新商品到清单", expanded=True):
+with st.container(border=True):
+    st.subheader("➕ 添加新商品到清单")
     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     with col1:
-        name = st.text_input("商品名称", value="预制钢结构")
+        name = st.text_input("商品名称", value="预制钢结构", key="input_name")
     with col2:
-        price = st.number_input("采购单价 (CNY)", min_value=0.0, value=1000.0)
+        price = st.number_input("采购单价 (CNY)", min_value=0.0, value=1000.0, key="input_price")
     with col3:
-        qty = st.number_input("数量", min_value=1, value=10)
+        qty = st.number_input("数量", min_value=1, value=10, key="input_qty")
     with col4:
-        vol = st.number_input("单件体积 (CBM)", min_value=0.0, value=0.1, format="%.3f")
+        vol = st.number_input("单件体积 (CBM)", min_value=0.0, value=0.100, format="%.3f", key="input_vol")
     
     c5, c6, c7 = st.columns([1, 1, 1])
     with c5:
-        duty = st.number_input("埃及关税率 (%)", min_value=0, max_value=100, value=10)
+        duty = st.number_input("埃及关税率 (%)", min_value=0, max_value=100, value=10, key="input_duty")
     with c6:
-        freight = st.number_input("预估海运费 (USD/CBM)", value=120)
+        freight = st.number_input("预估海运费 (USD/CBM)", value=120, key="input_freight")
     with c7:
         st.write("##")
-        if st.button("添加到清单"):
+        if st.button("🚀 点击添加到清单", use_container_width=True):
             new_item = {
                 "商品": name,
                 "单价(CNY)": price,
@@ -52,16 +52,19 @@ with st.expander("➕ 添加新商品到清单", expanded=True):
                 "关税率": duty / 100,
                 "海运费(USD)": (vol * qty) * freight
             }
-            # 修复逻辑：确保添加到 session_state
             st.session_state.items.append(new_item)
-            st.toast(f"✅ 已添加 {name}") # 替换为小弹窗提醒
+            st.toast(f"✅ 已成功添加: {name}")
 
-# --- 清单展示逻辑（修复 ValueError） ---
+# --- 清单展示区域 ---
+st.markdown("---")
+st.subheader("📋 我的采购清单")
+
+# 只有当篮子里有东西时，才运行计算逻辑和显示表格
 if len(st.session_state.items) > 0:
-    st.subheader("📋 当前采购清单")
+    # 1. 转化为表格数据
     df = pd.DataFrame(st.session_state.items)
     
-    # 核心计算逻辑
+    # 2. 执行计算
     df["货值(USD)"] = (df["单价(CNY)"] * df["数量"]) / usd_cny
     df["CIF(USD)"] = df["货值(USD)"] + df["海运费(USD)"]
     df["CIF(EGP)"] = df["CIF(USD)"] * usd_egp
@@ -69,26 +72,21 @@ if len(st.session_state.items) > 0:
     df["增值税14%(EGP)"] = (df["CIF(EGP)"] + df["埃及关税(EGP)"]) * 0.14
     df["总计成本(EGP)"] = df["CIF(EGP)"] + df["埃及关税(EGP)"] + df["增值税14%(EGP)"]
     
-    # 显示表格
-    st.dataframe(df.style.format(precision=2), use_container_width=True)
+    # 3. 显示精美表格
+    st.dataframe(df, use_container_width=True)
 
-    if st.button("🗑️ 清空清单"):
-        st.session_state.items = []
-        st.rerun()
-
-    # --- 总计看板 ---
+    # 4. 显示总计看板
     st.divider()
-    st.header("💰 项目总预算预估")
+    t_egp, t_cny, t_vol = st.columns(3)
     total_egp = df["总计成本(EGP)"].sum()
     total_cny = (total_egp / usd_egp) * usd_cny
-    
-    k1, k2, k3 = st.columns(3)
-    k1.metric("整批货物总成本 (EGP)", f"{total_egp:,.2f}")
-    k2.metric("约合人民币总额 (CNY)", f"{total_cny:,.2f}")
-    k3.metric("总计体积 (CBM)", f"{df['体积(CBM)'].sum():,.2f}")
-else:
-    # 当清单为空时显示的内容，避免报错
-    st.info("💡 您的采购清单目前为空，请在上方输入信息并点击“添加到清单”按钮。")
+    t_egp.metric("整批总额 (EGP)", f"{total_egp:,.2f}")
+    t_cny.metric("整批总额 (CNY)", f"{total_cny:,.2f}")
+    t_vol.metric("总计体积 (CBM)", f"{df['体积(CBM)'].sum():,.2f}")
 
-st.markdown("---")
-st.caption("注：本工具仅供概算参考。埃及清关受ACI系统、进出口资质等多种因素影响，实际请以具体报关单为准。")
+    if st.button("🗑️ 清空所有清单"):
+        st.session_state.items = []
+        st.rerun()
+else:
+    # 篮子为空时，显示一段友好的提示，而不是报错
+    st.info("💡 目前清单是空的。请在上方输入商品信息并点击“🚀 点击添加到清单”按钮。")
