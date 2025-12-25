@@ -52,15 +52,16 @@ with st.expander("➕ 添加新商品到清单", expanded=True):
                 "关税率": duty / 100,
                 "海运费(USD)": (vol * qty) * freight
             }
+            # 修复逻辑：确保添加到 session_state
             st.session_state.items.append(new_item)
-            st.success(f"已添加 {name}")
+            st.toast(f"✅ 已添加 {name}") # 替换为小弹窗提醒
 
-# --- 清单展示 ---
-if st.session_state.items:
+# --- 清单展示逻辑（修复 ValueError） ---
+if len(st.session_state.items) > 0:
     st.subheader("📋 当前采购清单")
     df = pd.DataFrame(st.session_state.items)
     
-    # 计算各项税费
+    # 核心计算逻辑
     df["货值(USD)"] = (df["单价(CNY)"] * df["数量"]) / usd_cny
     df["CIF(USD)"] = df["货值(USD)"] + df["海运费(USD)"]
     df["CIF(EGP)"] = df["CIF(USD)"] * usd_egp
@@ -68,9 +69,10 @@ if st.session_state.items:
     df["增值税14%(EGP)"] = (df["CIF(EGP)"] + df["埃及关税(EGP)"]) * 0.14
     df["总计成本(EGP)"] = df["CIF(EGP)"] + df["埃及关税(EGP)"] + df["增值税14%(EGP)"]
     
+    # 显示表格
     st.dataframe(df.style.format(precision=2), use_container_width=True)
 
-    if st.button("清空清单"):
+    if st.button("🗑️ 清空清单"):
         st.session_state.items = []
         st.rerun()
 
@@ -84,9 +86,9 @@ if st.session_state.items:
     k1.metric("整批货物总成本 (EGP)", f"{total_egp:,.2f}")
     k2.metric("约合人民币总额 (CNY)", f"{total_cny:,.2f}")
     k3.metric("总计体积 (CBM)", f"{df['体积(CBM)'].sum():,.2f}")
-
 else:
-    st.info("清单为空，请在上方添加商品。")
+    # 当清单为空时显示的内容，避免报错
+    st.info("💡 您的采购清单目前为空，请在上方输入信息并点击“添加到清单”按钮。")
 
 st.markdown("---")
-st.caption("注：本工具仅供概算参考。埃及清关受ACI系统、反倾销税、进出口资质等多种因素影响，实际请以具体报关单为准。")
+st.caption("注：本工具仅供概算参考。埃及清关受ACI系统、进出口资质等多种因素影响，实际请以具体报关单为准。")
